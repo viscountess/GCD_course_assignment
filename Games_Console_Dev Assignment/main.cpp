@@ -110,7 +110,18 @@ void applySobelFilter(string fileName, int *inputBuffer, int imageWidth, int ima
 
 				}
 			}
-			int sum = abs(sum_x) + abs(sum_y);
+			//No value checks for going above 255
+			//int sum = abs(sum_x) + abs(sum_y);
+
+			//Magnitude formula from phung & bouzerdoum paper
+			int sum = sqrt((sum_x*sum_x) + (sum_y*sum_y));
+
+			//Clamping the sobel - so it doesnt go out of bounds
+			if (sum < 0)
+				sum = 0;
+			if (sum > 255)
+				sum = 255;
+
 			//cout << "Sum: " << sum << endl;
 
 			int index = (y * imageWidth) + x;
