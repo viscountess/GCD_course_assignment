@@ -60,7 +60,7 @@ int *imageParser(string fileName, int &imageWidth, int &imageHeight)
 
 }
 
-void applySobelFilter(string fileName, int *inputBuffer, int imageWidth, int imageHeight)
+int *applySobelFilter(string fileName, int *inputBuffer, int imageWidth, int imageHeight)
 {
 	int row = 0, col = 0;
 
@@ -144,14 +144,67 @@ void applySobelFilter(string fileName, int *inputBuffer, int imageWidth, int ima
 			fs << " ";
 		}
 	fs.close();
+
+	return out;
+}
+
+//Aiming to work out the sum edge density - I am assuming this is working
+int getEdgeDensitySumForRegion(int *imageBuffer, int xpos, int ypos, int width, int height, int imageWidth)
+{
+	int magnitudeSum = 0;
+	for (int x = xpos; x < xpos + width; x++)
+	{
+		for (int y = ypos; y < ypos + height; y++)
+		{
+			int index = (y * imageWidth) + x;
+			magnitudeSum += imageBuffer[index];
+		}
+	}
+
+	return magnitudeSum;
+}
+
+
+int *calculateEdgeIntegral(int *imageBuffer, int imageWidth, int imageHeight)
+{
+	int *outputBuffer = new int[imageHeight * imageWidth];
+	
+
+	for (int i = 0; i < imageHeight * imageWidth; i++)
+	{
+		int y = i / imageWidth;
+		int x = i - (y * imageWidth);
+		outputBuffer[i] = getEdgeDensitySumForRegion(imageBuffer, 0, 0, x, y, imageWidth);
+	}
+
+	return outputBuffer;
+}
+
+//Using the formula:
+// f = 1/Ar {{ S(x2, y2) + S(x1 ? 1, y1 ? 1) ? S(x2, y1 ? 1) ? S(x1 ? 1, y2) }
+float getEdgeDensityFeatureForRegion(int *integralBuffer, int xpos, int ypos, int width, int height, int imageWidth)
+{
+	int endXpos = xpos + width;
+	int endYpos = ypos + height;
+	int endIndex = (endYpos * imageWidth) + endXpos;
+	int index2 = ((ypos - 1) * imageWidth) + (xpos - 1);
+	int index3 = ((ypos - 1) * imageWidth) + endXpos;
+	int index4 = (endYpos * imageWidth) + (xpos - 1);
+	float area = width * height;
+	float density = (1.f / area) * (integralBuffer[endIndex] + integralBuffer[index2] - integralBuffer[index3] - integralBuffer[index4]);
+
+	return density;
 }
 
 int main(int argc, char *argv[])
 {
 	int imageWidth, imageHeight;
 	int *imageBuffer = imageParser("image1.pgm", imageWidth, imageHeight);
-	applySobelFilter("sobel_applied.pgm", imageBuffer, imageWidth, imageHeight);
+	int *sobelImage = applySobelFilter("sobel_applied.pgm", imageBuffer, imageWidth, imageHeight);
+	int *integralImage = calculateEdgeIntegral(sobelImage, imageWidth, imageHeight);
 
+	getEdgeDensityFeatureForRegion(integralImage, 1, 1, 200, 200, imageWidth);
+	
 
 	return 0;
 
