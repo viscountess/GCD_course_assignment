@@ -2,6 +2,8 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <vector>
+#include <algorithm>
 
 using namespace std;
 
@@ -196,15 +198,114 @@ float getEdgeDensityFeatureForRegion(int *integralBuffer, int xpos, int ypos, in
 	return density;
 }
 
+//For storing the density result
+struct DensityResult
+{
+	float densityValue;
+	int xpos, ypos, width, height;
+};
+
+void calculateDensityForArea(int *integralImage, int xpos, int ypos, int width, int height,  int imageWidth, vector<DensityResult> &results, int currentDepth)
+{
+	if (currentDepth >= 4)
+		return;
+	
+	DensityResult currentResult;
+	currentResult.xpos = xpos;
+	currentResult.ypos = ypos;
+	currentResult.width = width;
+	currentResult.height = height;
+	currentResult.densityValue = getEdgeDensityFeatureForRegion(integralImage, xpos, ypos, width, height, imageWidth);
+	results.push_back(currentResult);  //store the current result inside the vector
+
+	//top left corner
+	calculateDensityForArea(integralImage, xpos, ypos, width / 2, height / 2, imageWidth, results, currentDepth + 1);
+	//top right corner
+	calculateDensityForArea(integralImage, xpos + (width/2), ypos, width / 2, height / 2, imageWidth, results, currentDepth + 1);
+	//bottom left corner
+	calculateDensityForArea(integralImage, xpos, ypos + (height/2), width / 2, height / 2, imageWidth, results, currentDepth + 1);
+	//bottom right corner
+	calculateDensityForArea(integralImage, xpos + (width/2), ypos + (height/2), width / 2, height / 2, imageWidth, results, currentDepth + 1);
+}
+
+//Draw rectangle around area of interest after calculating the density
+//numResults is the number of boxes to be drawn
+void addRectToImage(int *imageBuffer, string fileName, vector<DensityResult> &results, int numResults, int imageWidth, int imageHeight)
+{
+	cout << "Drawing rectangles...." << endl; //for debug
+
+	for (int i = 0; i < min(numResults, (int)results.size()); i++)
+	{
+		DensityResult result = results[i];
+
+		//Top & bottom line of rectangle
+		for (int x = result.xpos; x < result.xpos + result.width; x++)
+		{
+			int index = (result.ypos * imageWidth) + x;
+			imageBuffer[index] = 255;
+
+			index = ((result.ypos + result.height) * imageWidth) + x;
+			imageBuffer[index] = 255;
+		}
+
+		//Left & Right line of rectangle
+		for (int y = result.ypos; y < result.ypos + result.height; y++)
+		{
+			int index = (y * imageWidth) + result.xpos;
+			imageBuffer[index] = 255;
+
+			index = (y * imageWidth) + (result.xpos + result.width);
+			imageBuffer[index] = 255;
+		}
+	}
+
+	//Outputting the pgm image file
+	ofstream fs(fileName);
+	fs << "P2" << endl;
+	fs << imageWidth << " " << imageHeight << endl;
+	fs << "255" << endl;
+	for (int i = 0; i < imageWidth * imageHeight; i++) {
+		int aa = imageBuffer[i];
+		//cout << aa << endl;
+		fs << aa;
+		fs << " ";
+	}
+	fs.close();
+}
+
+//lhs = left hand side  rhs = right hand side
+bool density_sorter(DensityResult const &lhs, DensityResult const &rhs)
+{
+	return lhs.densityValue > rhs.densityValue;
+}
+
 int main(int argc, char *argv[])
 {
 	int imageWidth, imageHeight;
-	int *imageBuffer = imageParser("image1.pgm", imageWidth, imageHeight);
+	int *imageBuffer = imageParser("image11.pgm", imageWidth, imageHeight);
 	int *sobelImage = applySobelFilter("sobel_applied.pgm", imageBuffer, imageWidth, imageHeight);
 	int *integralImage = calculateEdgeIntegral(sobelImage, imageWidth, imageHeight);
 
-	getEdgeDensityFeatureForRegion(integralImage, 1, 1, 200, 200, imageWidth);
 	
+	vector<DensityResult> results; //vector pointing to struct
+
+	calculateDensityForArea(integralImage, 1, 1, imageWidth - 2, imageHeight - 2, imageWidth, results, 0);
+
+	//float bestDensity = -1;
+	//int bestIndex = 0;
+
+	////Finds the square with the highest density
+	//for (int i = 0; i < results.size(); i++)
+	//{
+	//	if (results[i].densityValue > bestDensity)
+	//	{
+	//		bestDensity = results[i].densityValue;
+	//		bestIndex = i;
+	//	}
+	//}
+
+	sort(results.begin(), results.end(), &density_sorter);
+	addRectToImage(imageBuffer, "finalResult.pgm", results, 6, imageWidth, imageHeight);
 
 	return 0;
 
