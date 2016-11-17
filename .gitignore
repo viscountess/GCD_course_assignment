@@ -1,1 +1,3 @@
 //Files for Git to ignore
+*.suo
+*.sdf
